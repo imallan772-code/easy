@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>사다리 게임</title>
+<style>
+body { background:#000; color:#fff; text-align:center; font-family:sans-serif; }
+h1 { color:#ffcc00; }
+button { padding:12px 20px; background:#ffcc00; border:none; font-weight:bold; cursor:pointer; }
+#point { margin:10px; font-size:18px; }
+canvas { background:#111; margin-top:20px; }
+</style>
+</head>
+
+<body>
+
+<h1>🎯 네임드 사다리</h1>
+<div id="point">포인트: 로딩중...</div>
+
+<button onclick="startGame()">게임 시작 (-100P)</button>
+
+<canvas id="ladder" width="300" height="400"></canvas>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js"></script>
+
+<script>
+// 🔥 Firebase 설정 (여기에 본인꺼 넣기)
+const firebaseConfig = {
+  apiKey: "여기",
+  authDomain: "여기",
+  projectId: "여기",
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser;
+
+// ✅ 로그인 + 포인트 초기 지급
+auth.signInAnonymously().then(async (user) => {
+  currentUser = user.user;
+  const ref = db.collection("users").doc(currentUser.uid);
+  const doc = await ref.get();
+
+  if (!doc.exists) {
+    await ref.set({ point: 1000 });
+  }
+
+  updatePoint();
+});
+
+// ✅ 포인트 표시
+async function updatePoint() {
+  const doc = await db.collection("users").doc(currentUser.uid).get();
+  document.getElementById("point").innerText = "포인트: " + doc.data().point;
+}
+
+// ✅ 게임 시작
+async function startGame() {
+  const ref = db.collection("users").doc(currentUser.uid);
+  const doc = await ref.get();
+  let point = doc.data().point;
+
+  if (point < 100) {
+    alert("포인트 부족");
+    return;
+  }
+
+  await ref.update({ point: point - 100 });
+  updatePoint();
+
+  drawLadder();
+  animateResult();
+}
+
+// 🎯 사다리 그리기
+function drawLadder() {
+  const canvas = document.getElementById("ladder");
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0,0,300,400);
+
+  let x1 = 100, x2 = 200;
+
+  ctx.beginPath();
+  ctx.moveTo(x1,0);
+  ctx.lineTo(x1,400);
+  ctx.moveTo(x2,0);
+  ctx.lineTo(x2,400);
+  ctx.strokeStyle="#fff";
+  ctx.stroke();
+
+  for(let y=50; y<350; y+=50){
+    if(Math.random()>0.5){
+      ctx.moveTo(x1,y);
+      ctx.lineTo(x2,y);
+    }
+  }
+  ctx.stroke();
+}
+
+// 🎬 애니메이션 + 결과
+function animateResult() {
+  const canvas = document.getElementById("ladder");
+  const ctx = canvas.getContext("2d");
+
+  let y = 0;
+  let x = 100;
+
+  let interval = setInterval(() => {
+    ctx.fillStyle = "red";
+    ctx.fillRect(x-3,y,6,6);
+    y += 5;
+
+    if (y > 400) {
+      clearInterval(interval);
+      finishGame();
+    }
+  }, 30);
+}
+
+// 🎁 결과 처리
+async function finishGame() {
+  const ref = db.collection("users").doc(currentUser.uid);
+
+  const result = Math.random() < 0.3 ? "당첨" : "꽝";
+  let reward = result === "당첨" ? 300 : 0;
+
+  const doc = await ref.get();
+  let point = doc.data().point;
+
+  await ref.update({ point: point + reward });
+
+  updatePoint();
+
+  alert("결과: " + result + " / +" + reward + "P");
+}
+</script>
+
+</body>
+</html>
